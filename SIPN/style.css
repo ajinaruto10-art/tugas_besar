@@ -1,0 +1,127 @@
+::-webkit-scrollbar {
+    display: none;
+}
+.form{
+    width: 100%;
+}
+body{
+    background-color: #ffffff;
+    height: 100vh;
+    position: relative;
+}
+h1{
+    position: relative;
+    text-align: left;
+    top: 15px;
+    font-size: 1.6rem;
+    color: #000000;
+}
+h2{
+    position: relative;
+    top: 15px;
+    text-align: left;
+    margin-top: 5px;
+    left: 12px;
+    font-size: 1.4rem;
+    color: #000000;
+}
+
+h3{
+    position: relative;
+    text-align: left;
+    top: 15px;
+    left: 15px;
+    font-size: 1.6rem;
+    color: #000000;
+}
+h4{
+    position: relative;
+    text-align: left;
+    top: 15px;
+    left: 35px;
+    font-size: 1.6rem;
+    color: #000000;
+}
+h5{
+    position: relative;
+    top: 15px;
+    text-align: left;
+    margin-top: 5px;
+    left: 35px;
+    font-size: 1.4rem;
+    color: #000000;
+}
+h6{
+    position: relative;
+    text-align: left;
+    top: 15px;
+    left: 26px;
+    font-size: 1.6rem;
+    color: #000000;
+}
+.card-form{
+    border: 0.1px solid #d3d3d3;
+}
+.card-formm{
+    border: none;
+}
+.card-get{
+    text-align: left;
+    margin-left: 10px;
+    height: 150px;
+
+}
+.radio{
+    position: relative;
+    left: 22px;
+    align-items: start;
+    text-align: start;
+}
+.button1{
+    position: relative;
+    left: 22px;
+    justify-content: start; 
+    align-items: start; 
+    text-align: left;
+}
+.button2{
+    position: relative;
+    left: 35px;
+    justify-content: start; 
+    align-items: start; 
+    text-align: left;
+}
+.btn-primary{
+    color: #ffffff;
+    background-color: #2e67cf;
+}
+.btn-primary:hover{
+    color: #ffffff;
+    background-color: #1a4e9c;
+    border-color: #1a4e9c;
+}
+.btn-danger{
+    color: #ffffff;
+    background-color: #535456;
+    border-color: #535456;
+}
+.btn-danger:hover{
+    color: #ffffff;
+    background-color: #3b3b3d;
+    border-color: #3b3b3d;
+}
+.label-01{
+    position: relative;
+    justify-content: start; 
+    align-items: start; 
+    text-align: left;
+    top: 0px;
+    left: -158px;
+    font-size: 1rem;
+    color: #000000;
+}
+.table-dark{
+    position: relative;
+    background-color: #535456;
+    z-index: 100;
+}
