@@ -1,86 +1,92 @@
 <?php
-require_once __DIR__ . '/koneksi.php';
-
-// 1. Proses simpan data ketika form di-submit
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $kode_mapel = trim($_POST['kode_mapel'] ?? '');
-    $nama_mapel = trim($_POST['nama_mapel'] ?? '');
-    $guru_id    = !empty($_POST['guru_id']) ? "'".mysqli_real_escape_string($koneksi, $_POST['guru_id'])."'" : "NULL";
-
-    if (!empty($kode_mapel) && !empty($nama_mapel)) {
-        $kode_mapel = mysqli_real_escape_string($koneksi, $kode_mapel);
-        $nama_mapel = mysqli_real_escape_string($koneksi, $nama_mapel);
-
-        $query = "INSERT INTO mapel (kode_mapel, nama_mapel, guru_id) VALUES ('$kode_mapel', '$nama_mapel', $guru_id)";
-
-        if (mysqli_query($koneksi, $query)) {
-            header("Location: mapel.php?status=success_tambah");
-            exit();
-        } else {
-            $error = "Gagal menyimpan data: " . mysqli_error($koneksi);
-        }
-    } else {
-        $error = "Kode Mapel dan Nama Mapel wajib diisi!";
-    }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-// 2. Ambil data guru untuk opsi dropdown
-$query_guru = mysqli_query($koneksi, "SELECT id, nama FROM guru ORDER BY nama ASC");
-
-require_once __DIR__ . '/navbar.php';
+$role_user = strtolower(trim($_SESSION['role'] ?? ''));
+$nama_user = $_SESSION['nama'] ?? ($_SESSION['username'] ?? 'User');
 ?>
 
-<div class="container mt-4 mb-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold">Tambah Mata Pelajaran Baru</h5>
-                </div>
-                <div class="card-body p-4">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="index.php">
+            <i class="bi bi-mortarboard-fill me-2"></i>SIPN - SMK Sangkuriang 1
+        </a>
 
-                    <?php if (isset($error)): ?>
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <?= $error; ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    <?php endif; ?>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSIPN" aria-controls="navbarSIPN" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
 
-                    <form action="" method="POST">
-                        <div class="mb-3">
-                            <label for="kode_mapel" class="form-label fw-bold">Kode Mapel <span class="text-danger">*</span></label>
-                            <input type="text" name="kode_mapel" id="kode_mapel" class="form-control" placeholder="Contoh: MP-001" required value="<?= htmlspecialchars($_POST['kode_mapel'] ?? ''); ?>">
-                        </div>
+        <div class="collapse navbar-collapse" id="navbarSIPN">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" href="index.php">Home</a>
+                </li>
 
-                        <div class="mb-3">
-                            <label for="nama_mapel" class="form-label fw-bold">Nama Mapel <span class="text-danger">*</span></label>
-                            <input type="text" name="nama_mapel" id="nama_mapel" class="form-control" placeholder="Contoh: Pemrograman Web" required value="<?= htmlspecialchars($_POST['nama_mapel'] ?? ''); ?>">
-                        </div>
+                <?php if ($role_user === 'admin'): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            User
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="daftar_user2.php">Daftar User</a></li>
+                            <li><a class="dropdown-item" href="tambah_user.php">Tambah User</a></li>
+                        </ul>
+                    </li>
 
-                        <div class="mb-4">
-                            <label for="guru_id" class="form-label fw-bold">Guru Pengampu</label>
-                            <select name="guru_id" id="guru_id" class="form-select">
-                                <option value="">-- Pilih Guru (Opsional) --</option>
-                                <?php if ($query_guru && mysqli_num_rows($query_guru) > 0): ?>
-                                    <?php while ($guru = mysqli_fetch_assoc($query_guru)): ?>
-                                        <option value="<?= $guru['id']; ?>" <?= (isset($_POST['guru_id']) && $_POST['guru_id'] == $guru['id']) ? 'selected' : ''; ?>>
-                                            <?= htmlspecialchars($guru['nama']); ?>
-                                        </option>
-                                    <?php endwhile; ?>
-                                <?php endif; ?>
-                            </select>
-                        </div>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Siswa
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="daftar_siswa.php">Daftar Siswa</a></li>
+                            <li><a class="dropdown-item" href="tambah_siswa.php">Tambah Siswa</a></li>
+                        </ul>
+                    </li>
 
-                        <div class="d-flex justify-content-between border-top pt-3">
-                            <a href="mapel.php" class="btn btn-secondary">Kembali</a>
-                            <button type="submit" class="btn btn-primary px-4">Simpan Mapel</button>
-                        </div>
-                    </form>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Guru
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="daftar_guru.php">Daftar Guru</a></li>
+                            <li><a class="dropdown-item" href="tambah_guru.php">Tambah Guru</a></li>
+                        </ul>
+                    </li>
 
-                </div>
-            </div>
+                    <li class="nav-item dropdown">
+                        <!-- Ubah href di bawah ini ke nama file daftar mapel kamu (misalnya mapel.php atau daftar_mapel.php) -->
+                        <a class="nav-link dropdown-toggle" href="mapel.php" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Mapel
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="mapel.php">Daftar Mapel</a></li>
+                            <li><a class="dropdown-item" href="aksi_tambah_mapel.php">Tambah Mapel</a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            Mengajar
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark">
+                            <li><a class="dropdown-item" href="mengajar.php">Daftar Mengajar</a></li>
+                            <li><a class="dropdown-item" href="tambah_mengajar.php">Tambah Mengajar</a></li>
+                        </ul>
+                    </li>
+                <?php endif; ?>
+            </ul>
+
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-gear-fill me-1"></i><?= htmlspecialchars($nama_user); ?> (<?= ucfirst($role_user ?: 'Guest'); ?>)
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                        <li><a class="dropdown-item" href="logout.php">Logout</a></li>
+                    </ul>
+                </li>
+            </ul>
         </div>
     </div>
-</div>
-
-<?php require_once __DIR__ . '/footer.php'; ?>
+</nav>

@@ -2,158 +2,236 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// 1. Panggil file koneksi database
 require_once 'koneksi.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Cek status login
-if (!isset($_SESSION['login'])) {
+if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
     header("Location: login.php");
     exit;
 }
 
-$role           = strtolower(trim($_SESSION['role'] ?? ''));
-$username_login = $_SESSION['username'] ?? '';
+$role           = strtolower(trim((string)($_SESSION['role'] ?? '')));
+$username_login = (string)($_SESSION['username'] ?? '');
 $username_aman  = mysqli_real_escape_string($koneksi, $username_login);
 
-// Inisialisasi variabel awal
-$id_siswa_login = 0;
-$user_id_login  = 0;
-$kelas_siswa    = '';
+function ambil_kolom_tabel2(mysqli $koneksi, string $tabel): array {
+    $kolom = [];
+    $res = mysqli_query($koneksi, "SHOW COLUMNS FROM `$tabel`");
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            $kolom[] = $row['Field'];
+        }
+    }
+    return $kolom;
+}
 
-// Ambil ID user dari tabel users yang sedang login
-$q_user_s = mysqli_query($koneksi, "SELECT id FROM users WHERE username = '$username_aman' LIMIT 1");
-$d_user_s = $q_user_s ? mysqli_fetch_assoc($q_user_s) : null;
-$user_id_login = $d_user_s['id'] ?? 0;
+$kolom_users = ambil_kolom_tabel2($koneksi, 'users');
+$kolom_siswa = ambil_kolom_tabel2($koneksi, 'siswa');
+$kolom_mapel = ambil_kolom_tabel2($koneksi, 'mapel');
+$kolom_nilai = ambil_kolom_tabel2($koneksi, 'nilai');
 
-if ($role === 'siswa') {
-    // Ambil data profil & kelas siswa yang sedang login
-    $q_siswa = mysqli_query($koneksi, "
-        SELECT * FROM siswa 
-        WHERE user_id = '$user_id_login' 
-           OR user_id = '$user_id_login' 
-        LIMIT 1
-    ");
-    $d_siswa = $q_siswa ? mysqli_fetch_assoc($q_siswa) : null;
+$id_siswa_login = '';
+$user_id_login  = (string)($_SESSION['user_id'] ?? ($_SESSION['id'] ?? ''));
+$nama_siswa     = $username_login !== '' ? $username_login : 'Siswa';
+$kelas_siswa    = 'Belum Diatur';
+$nis_siswa      = '-';
 
-    $id_siswa_login = $d_siswa['ID'] ?? $d_siswa['id'] ?? $user_id_login;
-    $nama_siswa     = $d_siswa['nama'] ?? $d_siswa['nama_siswa'] ?? $username_login;
-    $kelas_siswa    = $d_siswa['kelas'] ?? 'Belum Diatur';
-    $nis_siswa      = $d_siswa['nis'] ?? '-';
+if ($user_id_login === '' && $username_login !== '' && !empty($kolom_users)) {
+    $q_user_s = mysqli_query($koneksi, "SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM('$username_aman')) LIMIT 1");
+    if ($q_user_s && ($d_user_s = mysqli_fetch_assoc($q_user_s))) {
+        $user_id_login = (string)($d_user_s['ID'] ?? ($d_user_s['id'] ?? ''));
+    }
+}
+
+$pk_siswa = in_array('ID', $kolom_siswa, true) ? 'ID' : (in_array('id', $kolom_siswa, true) ? 'id' : 'ID');
+$pk_mapel = in_array('ID', $kolom_mapel, true) ? 'ID' : (in_array('id', $kolom_mapel, true) ? 'id' : 'ID');
+$kol_kelas_siswa = in_array('kelas', $kolom_siswa, true) ? 'kelas' : (in_array('nama_kelas', $kolom_siswa, true) ? 'nama_kelas' : '');
+
+if ($role === 'siswa' && !empty($kolom_siswa)) {
+    $syarat_s = [];
+    if ($user_id_login !== '') {
+        $uid_esc = mysqli_real_escape_string($koneksi, $user_id_login);
+        if (in_array('user_id', $kolom_siswa, true)) {
+            $syarat_s[] = "user_id = '$uid_esc'";
+        }
+        if (in_array('id_user', $kolom_siswa, true)) {
+            $syarat_s[] = "id_user = '$uid_esc'";
+        }
+    }
+    if ($username_login !== '') {
+        $uname_esc = mysqli_real_escape_string($koneksi, strtolower(trim($username_login)));
+        foreach (['username', 'nis', 'nisn', 'nama'] as $ks) {
+            if (in_array($ks, $kolom_siswa, true)) {
+                $syarat_s[] = "LOWER(TRIM(`$ks`)) = '$uname_esc'";
+            }
+        }
+    }
+
+    $d_siswa = null;
+    if (!empty($syarat_s)) {
+        $q_siswa = mysqli_query($koneksi, "SELECT * FROM siswa WHERE (" . implode(' OR ', $syarat_s) . ") LIMIT 1");
+        if ($q_siswa) {
+            $d_siswa = mysqli_fetch_assoc($q_siswa);
+        }
+    }
+
+    if ($d_siswa) {
+        $id_siswa_login = (string)($d_siswa[$pk_siswa] ?? ($d_siswa['id'] ?? ($d_siswa['ID'] ?? '')));
+        $nama_siswa     = (string)($d_siswa['nama'] ?? ($d_siswa['nama_siswa'] ?? ($username_login ?: 'Siswa')));
+        $kelas_siswa    = (string)($d_siswa[$kol_kelas_siswa] ?? ($d_siswa['kelas'] ?? ($d_siswa['nama_kelas'] ?? 'Belum Diatur')));
+        $nis_siswa      = (string)($d_siswa['nis'] ?? ($d_siswa['nisn'] ?? '-'));
+    }
+}
+
+// Ambil daftar siswa yang sekelas dengan siswa yang sedang login
+$rows_teman_sekelas = [];
+if ($role === 'siswa' && !empty($kolom_siswa) && $kelas_siswa !== '' && $kelas_siswa !== 'Belum Diatur' && $kol_kelas_siswa !== '') {
+    $kelas_norm = strtolower(preg_replace('/\s+/', ' ', trim($kelas_siswa)));
+    $kelas_esc  = mysqli_real_escape_string($koneksi, $kelas_norm);
+    $order_s    = in_array('nama', $kolom_siswa, true) ? 'nama ASC' : (in_array('nama_siswa', $kolom_siswa, true) ? 'nama_siswa ASC' : "`$pk_siswa` ASC");
+
+    $sql_sekelas_fallback = "
+        SELECT *
+        FROM siswa
+        WHERE LOWER(TRIM(`$kol_kelas_siswa`)) = '$kelas_esc'
+           OR REPLACE(LOWER(TRIM(`$kol_kelas_siswa`)), '-', ' ') = REPLACE('$kelas_esc', '-', ' ')
+        ORDER BY $order_s
+    ";
+    $q_sekelas = mysqli_query($koneksi, $sql_sekelas_fallback);
+    if ($q_sekelas) {
+        while ($rs = mysqli_fetch_assoc($q_sekelas)) {
+            $rows_teman_sekelas[] = $rs;
+        }
+    }
+}
+
+$rows_nilai = [];
+$error_tampil = '';
+
+if (empty($kolom_nilai)) {
+    $error_tampil = "Tabel 'nilai' belum ditemukan di database.";
+} else {
+    $join_sql = "";
+    $sumber_kelas = [];
+
+    if (in_array('kelas', $kolom_nilai, true)) {
+        $sumber_kelas[] = "NULLIF(TRIM(n.kelas), '')";
+    }
+    if (in_array('nama_kelas', $kolom_nilai, true)) {
+        $sumber_kelas[] = "NULLIF(TRIM(n.nama_kelas), '')";
+    }
+
+    $select_nama_siswa = in_array('nama_siswa', $kolom_nilai, true) ? "COALESCE(NULLIF(TRIM(n.nama_siswa), ''), '-')" : "'-'";
+    $select_nama_mapel = in_array('nama_mapel', $kolom_nilai, true) ? "COALESCE(NULLIF(TRIM(n.nama_mapel), ''), '-')" : (in_array('mapel', $kolom_nilai, true) ? "COALESCE(NULLIF(TRIM(n.mapel), ''), '-')" : "'-'");
+
+    if (!empty($kolom_siswa)) {
+        $kondisi_join_s = [];
+        if (in_array('nis', $kolom_nilai, true) && in_array('nis', $kolom_siswa, true)) {
+            $kondisi_join_s[] = "(TRIM(n.nis) != '' AND TRIM(n.nis) = TRIM(s.nis))";
+        }
+        if (in_array('siswa_id', $kolom_nilai, true)) {
+            $kondisi_join_s[] = "n.siswa_id = s.`$pk_siswa`";
+        }
+        if (in_array('nama_siswa', $kolom_nilai, true) && in_array('nama', $kolom_nilai, true)) {
+            $kondisi_join_s[] = "(TRIM(n.nama_siswa) != '' AND LOWER(TRIM(n.nama_siswa)) = LOWER(TRIM(s.nama)))";
+        }
+
+        if (!empty($kondisi_join_s)) {
+            $join_sql .= " LEFT JOIN siswa s ON (" . implode(' OR ', $kondisi_join_s) . ") ";
+            $kol_s_nama = in_array('nama', $kolom_siswa, true) ? 's.nama' : (in_array('nama_siswa', $kolom_siswa, true) ? 's.nama_siswa' : '');
+            if ($kol_s_nama !== '') {
+                $select_nama_siswa = "COALESCE(NULLIF(TRIM($kol_s_nama), ''), $select_nama_siswa)";
+            }
+            if ($kol_kelas_siswa !== '') {
+                $sumber_kelas[] = "NULLIF(TRIM(s.`$kol_kelas_siswa`), '')";
+            }
+        }
+    }
+
+    if (!empty($kolom_mapel)) {
+        $kondisi_join_m = [];
+        if (in_array('id_mapel', $kolom_nilai, true)) {
+            $kondisi_join_m[] = "n.id_mapel = m.`$pk_mapel`";
+        }
+        if (in_array('mapel_id', $kolom_nilai, true)) {
+            $kondisi_join_m[] = "n.mapel_id = m.`$pk_mapel`";
+        }
+        if (!empty($kondisi_join_m)) {
+            $join_sql .= " LEFT JOIN mapel m ON (" . implode(' OR ', $kondisi_join_m) . ") ";
+            $kol_m_nama = in_array('nama_mapel', $kolom_nilai, true) ? 'm.nama_mapel' : (in_array('mapel', $kolom_nilai, true) ? 'm.mapel' : '');
+            if ($kol_m_nama !== '') {
+                $select_nama_mapel = "COALESCE(NULLIF(TRIM($kol_m_nama), ''), $select_nama_mapel)";
+            }
+        }
+    }
+
+    if ($role === 'siswa' && $kelas_siswa !== '' && $kelas_siswa !== 'Belum Diatur') {
+        $k_s_esc = mysqli_real_escape_string($koneksi, trim($kelas_siswa));
+        $sumber_kelas[] = "'$k_s_esc'";
+    }
+    $sumber_kelas[] = "'-'";
+    $select_kelas = "COALESCE(" . implode(', ', $sumber_kelas) . ")";
+
+    $where_nilai = "";
+    if ($role === 'siswa') {
+        $syarat_w = [];
+        if ($nis_siswa !== '' && $nis_siswa !== '-' && in_array('nis', $kolom_nilai, true)) {
+            $nis_esc = mysqli_real_escape_string($koneksi, trim($nis_siswa));
+            $syarat_w[] = "TRIM(n.nis) = '$nis_esc'";
+        }
+        if ($nama_siswa !== '' && in_array('nama_siswa', $kolom_nilai, true)) {
+            $ns_esc = mysqli_real_escape_string($koneksi, strtolower(trim($nama_siswa)));
+            $syarat_w[] = "LOWER(TRIM(n.nama_siswa)) = '$ns_esc'";
+        }
+        if (!empty($syarat_w)) {
+            $where_nilai = " WHERE (" . implode(' OR ', $syarat_w) . ") ";
+        } else {
+            $where_nilai = " WHERE 1 = 0 ";
+        }
+    }
+
+    $pk_nilai = in_array('id', $kolom_nilai, true) ? 'n.id' : (in_array('ID', $kolom_nilai, true) ? 'n.ID' : '1');
+    $sql_tampil = "
+        SELECT
+            n.*,
+            $select_kelas AS kelas_tampil,
+            $select_nama_siswa AS nama_siswa_tampil,
+            $select_nama_mapel AS nama_mapel_tampil
+        FROM nilai n
+        $join_sql
+        $where_nilai
+        ORDER BY $pk_nilai DESC
+    ";
+
+    $res_tampil = mysqli_query($koneksi, $sql_tampil);
+    if ($res_tampil) {
+        while ($r = mysqli_fetch_assoc($res_tampil)) {
+            $rows_nilai[] = $r;
+        }
+    } else {
+        $error_tampil = mysqli_error($koneksi);
+    }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - SIPN</title>
+    <title>Home - SIPN</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 <body class="bg-light">
 
-<!-- NAVBAR UTAMA BERDASARKAN ROLE -->
-<?php if ($role === 'admin'): ?>
-<!-- NAVBAR ADMIN -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Admin</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link active" href="tabel2.php"><i class="bi bi-house-door me-1"></i> Dashboard</a></li>
-                <li class="nav-item"><a class="nav-link" href="tabel3.php"><i class="bi bi-person me-1"></i> Siswa</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_guru.php"><i class="bi bi-person-badge me-1"></i> Guru</a></li>
-                <li class="nav-item"><a class="nav-link" href="mapel.php"><i class="bi bi-journal-text me-1"></i> Mapel</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_mengajar.php"><i class="bi bi-easel me-1"></i> Mengajar</a></li>
-                
-                <!-- DROPDOWN PENGATURAN ADMIN -->
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownAdmin">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<?php elseif ($role === 'guru'): ?>
-<!-- NAVBAR GURU -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Guru</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link active" href="tabel2.php"><i class="bi bi-house-door me-1"></i> Data Nilai</a></li>
-                <li class="nav-item"><a class="nav-link" href="tambah_nilai.php"><i class="bi bi-plus-circle me-1"></i> Input Nilai</a></li>
-                <li class="nav-item"><a class="nav-link" href="tambah_mapel.php"><i class="bi bi-journal-plus me-1"></i> Tambah Mapel Saya</a></li>
-                <li class="nav-item"><a class="nav-link" href="daftar_guru.php"><i class="bi bi-people me-1"></i> Daftar Guru</a></li>
-                
-                <!-- DROPDOWN PENGATURAN GURU -->
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownGuru" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownGuru">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2 text-primary"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<?php else: ?>
-<!-- NAVBAR SISWA -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-success shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Siswa</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link active" href="tabel2.php"><i class="bi bi-journal-text me-1"></i> Nilai & Kelas Saya</a></li>
-                
-                <!-- DROPDOWN PENGATURAN SISWA -->
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownSiswa" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownSiswa">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2 text-success"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-<?php endif; ?>
+<?php if (file_exists('navbar.php')) { include 'navbar.php'; } ?>
 
 <div class="container my-4">
 
     <?php if ($role === 'siswa'): ?>
-        <!-- KARTU INFORMASI PROFIL SISWA -->
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-success text-white py-3">
                 <h5 class="mb-0 fw-bold"><i class="bi bi-person-badge me-2"></i>Informasi Siswa</h5>
@@ -176,46 +254,54 @@ if ($role === 'siswa') {
             </div>
         </div>
 
-        <!-- TABEL DAFTAR SISWA SE-KELAS -->
+        <!-- TABEL SISWA SATU KELAS -->
         <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill me-2"></i>Daftar Siswa Kelas <?= htmlspecialchars($kelas_siswa); ?></h5>
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold text-dark">
+                    <i class="bi bi-people-fill me-2 text-success"></i>Daftar Siswa Kelas <?= htmlspecialchars($kelas_siswa); ?>
+                </h5>
+                <span class="badge bg-secondary"><?= count($rows_teman_sekelas); ?> Siswa</span>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-bordered table-striped align-middle">
-                        <thead class="table-success">
+                    <table class="table table-striped table-hover align-middle border mb-0">
+                        <thead class="table-dark">
                             <tr>
-                                <th width="10%">No</th>
+                                <th style="width: 70px;">No</th>
+                                <th>NIS</th>
                                 <th>Nama Siswa</th>
-                                <th width="30%">Kelas</th>
+                                <th>Kelas</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php
-                            $kelas_aman = mysqli_real_escape_string($koneksi, $kelas_siswa);
-                            $query_teman = mysqli_query($koneksi, "
-                                SELECT * FROM siswa 
-                                WHERE kelas = '$kelas_aman' 
-                                ORDER BY nama ASC
-                            ");
-                            
-                            $no_t = 1;
-                            if ($query_teman && mysqli_num_rows($query_teman) > 0):
-                                while ($t_row = mysqli_fetch_assoc($query_teman)):
-                            ?>
+                            <?php if (!empty($rows_teman_sekelas)): ?>
+                                <?php $no_s = 1; ?>
+                                <?php foreach ($rows_teman_sekelas as $ts): ?>
+                                    <?php
+                                        $ts_nis   = (string)($ts['nis'] ?? ($ts['nisn'] ?? '-'));
+                                        $ts_nama  = (string)($ts['nama'] ?? ($ts['nama_siswa'] ?? '-'));
+                                        $ts_kelas = (string)($ts[$kol_kelas_siswa] ?? ($ts['kelas'] ?? ($ts['nama_kelas'] ?? $kelas_siswa)));
+                                        $is_diri  = ($id_siswa_login !== '' && (string)($ts[$pk_siswa] ?? '') === $id_siswa_login)
+                                            || (strtolower(trim($ts_nama)) === strtolower(trim($nama_siswa)));
+                                    ?>
+                                    <tr class="<?= $is_diri ? 'table-success fw-semibold' : ''; ?>">
+                                        <td><?= $no_s++; ?></td>
+                                        <td><?= htmlspecialchars($ts_nis); ?></td>
+                                        <td>
+                                            <?= htmlspecialchars($ts_nama); ?>
+                                            <?php if ($is_diri): ?>
+                                                <span class="badge bg-success ms-1">Anda</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?= htmlspecialchars($ts_kelas); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
                                 <tr>
-                                    <td><?= $no_t++; ?></td>
-                                    <td><?= htmlspecialchars($t_row['nama'] ?? $t_row['nama_siswa'] ?? '-'); ?></td>
-                                    <td><span class="badge bg-success"><?= htmlspecialchars($t_row['kelas'] ?? $kelas_siswa); ?></span></td>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        Belum ada data siswa lain yang terdaftar pada kelas <?= htmlspecialchars($kelas_siswa); ?>.
+                                    </td>
                                 </tr>
-                            <?php 
-                                endwhile;
-                            else:
-                            ?>
-                               <tr>
-                                   <td colspan="3" class="text-center text-muted py-3">Tidak ada data siswa lain di kelas ini.</td>
-                               </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -224,110 +310,95 @@ if ($role === 'siswa') {
         </div>
     <?php endif; ?>
 
-    <!-- TABEL DATA NILAI -->
+    <?php if ($error_tampil !== ''): ?>
+        <div class="alert alert-danger">
+            <strong>Error:</strong> <?= htmlspecialchars($error_tampil); ?>
+        </div>
+    <?php endif; ?>
+
     <div class="card shadow-sm border-0">
         <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0 fw-bold <?= $role === 'admin' ? 'text-dark' : ($role === 'guru' ? 'text-primary' : 'text-success'); ?>">
-                <?= $role === 'admin' ? 'Daftar Nilai Raport Siswa' : ($role === 'guru' ? 'Daftar Nilai Raport Siswa' : 'Daftar Nilai Raport Saya (Privat)'); ?>
+            <h4 class="mb-0 fw-bold text-dark">
+                <?= ($role === 'guru' || $role === 'admin') ? 'Daftar Siswa yang Diajar & Nilai' : 'Daftar Nilai Saya'; ?>
             </h4>
             <?php if ($role === 'guru' || $role === 'admin'): ?>
-                <a href="tambah_nilai.php" class="btn <?= $role === 'admin' ? 'btn-dark' : 'btn-primary'; ?> btn-sm fw-semibold">
+                <a href="input_nilai.php" class="btn btn-dark btn-sm fw-semibold">
                     <i class="bi bi-plus-circle me-1"></i> Input Nilai Baru
                 </a>
             <?php endif; ?>
         </div>
         <div class="card-body">
-
             <div class="table-responsive">
-                <table class="table table-bordered table-striped align-middle">
-                    <thead class="<?= $role === 'admin' ? 'table-dark' : ($role === 'guru' ? 'table-primary' : 'table-success'); ?>">
+                <table class="table table-striped table-hover align-middle border">
+                    <thead class="table-dark">
                         <tr>
                             <th>No</th>
                             <?php if ($role === 'guru' || $role === 'admin'): ?>
                                 <th>Nama Siswa</th>
                             <?php endif; ?>
+                            <th>Kelas</th>
                             <th>Mata Pelajaran</th>
-                            <th>Nilai Tugas</th>
+                            <th>Perilaku</th>
+                            <th>Nilai</th>
                             <th>Pengetahuan</th>
                             <th>Keterampilan</th>
-                            <th>Keterangan</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php
-                        if ($role === 'admin') {
-                            // Admin bisa melihat seluruh data nilai
-                            $query_tampil = mysqli_query($koneksi, "
-                                SELECT nr.*, s.nama AS nama_siswa, m.nama_mapel 
-                                FROM nilail_raport nr 
-                                LEFT JOIN siswa s ON nr.siswa_id = s.ID OR nr.siswa_id = s.id 
-                                LEFT JOIN mapel m ON nr.mapel_id = m.ID OR nr.mapel_id = m.id 
-                                ORDER BY nr.ID DESC
-                            ");
-                        } elseif ($role === 'guru') {
-                            // Guru melihat nilai siswa berdasarkan mapel yang diampunya
-                            $q_g = mysqli_query($koneksi, "SELECT id FROM guru WHERE uer_id = '$user_id_login' LIMIT 1");
-                            $d_g = $q_g ? mysqli_fetch_assoc($q_g) : null;
-                            $g_id = $d_g['id'] ?? 0;
-
-                            if (!empty($g_id)) {
-                                $query_tampil = mysqli_query($koneksi, "
-                                    SELECT nr.*, s.nama AS nama_siswa, m.nama_mapel 
-                                    FROM nilail_raport nr 
-                                    LEFT JOIN siswa s ON nr.siswa_id = s.ID OR nr.siswa_id = s.id 
-                                    LEFT JOIN mapel m ON nr.mapel_id = m.ID OR nr.mapel_id = m.id 
-                                    WHERE m.guru_id = '$g_id'
-                                    ORDER BY nr.ID DESC
-                                ");
-                            } else {
-                                $query_tampil = mysqli_query($koneksi, "
-                                    SELECT nr.*, s.nama AS nama_siswa, m.nama_mapel 
-                                    FROM nilail_raport nr 
-                                    LEFT JOIN siswa s ON nr.siswa_id = s.ID OR nr.siswa_id = s.id 
-                                    LEFT JOIN mapel m ON nr.mapel_id = m.ID OR nr.mapel_id = m.id 
-                                    ORDER BY nr.ID DESC
-                                ");
-                            }
-                        } else {
-                            // SISWA: HANYA MENAMPILKAN NILAI MILIK DIRINYA SENDIRI
-                            $query_tampil = mysqli_query($koneksi, "
-                                SELECT nr.*, m.nama_mapel 
-                                FROM nilail_raport nr 
-                                JOIN mapel m ON nr.mapel_id = m.ID OR nr.mapel_id = m.id 
-                                WHERE nr.siswa_id = '$id_siswa_login' OR nr.siswa_id = '$user_id_login'
-                                ORDER BY nr.ID DESC
-                            ");
-                        }
-
                         $no = 1;
-                        if ($query_tampil && mysqli_num_rows($query_tampil) > 0):
-                            while ($row = mysqli_fetch_assoc($query_tampil)):
+                        if (!empty($rows_nilai)):
+                            foreach ($rows_nilai as $row):
+                                $kls_row = '-';
+                                foreach (['kelas_tampil', 'kelas', 'nama_kelas'] as $kk) {
+                                    if (isset($row[$kk]) && trim((string)$row[$kk]) !== '') {
+                                        $kls_row = trim((string)$row[$kk]);
+                                        break;
+                                    }
+                                }
+                                if ($kls_row === '-' && $role === 'siswa' && $kelas_siswa !== '' && $kelas_siswa !== 'Belum Diatur') {
+                                    $kls_row = $kelas_siswa;
+                                }
+
+                                $perilaku_row = '-';
+                                foreach (['perilaku', 'sikap', 'keterangan'] as $kp) {
+                                    if (isset($row[$kp]) && trim((string)$row[$kp]) !== '') {
+                                        $perilaku_row = trim((string)$row[$kp]);
+                                        break;
+                                    }
+                                }
+
+                                $n_pengh = $row['nilai_pengetahuan'] ?? '0';
+                                $n_ketr  = $row['nilai_keterampilan'] ?? '0';
+                                $n_utama = is_numeric($n_pengh) && is_numeric($n_ketr)
+                                    ? round(((float)$n_pengh + (float)$n_ketr) / 2, 2)
+                                    : ($row['nilai'] ?? $n_pengh);
                         ?>
                             <tr>
                                 <td><?= $no++; ?></td>
                                 <?php if ($role === 'guru' || $role === 'admin'): ?>
-                                    <td><?= htmlspecialchars($row['nama_siswa'] ?? '-'); ?></td>
+                                    <td><?= htmlspecialchars((string)($row['nama_siswa_tampil'] ?? '-')); ?></td>
                                 <?php endif; ?>
-                                <td><?= htmlspecialchars($row['nama_mapel'] ?? '-'); ?></td>
-                                <td><?= htmlspecialchars($row['nilai_tugas'] ?? '0'); ?></td>
-                                <td><?= htmlspecialchars($row['nilail_pengetahuan'] ?? '0'); ?></td>
-                                <td><?= htmlspecialchars($row['nilail_keterampilan'] ?? '0'); ?></td>
-                                <td><?= htmlspecialchars($row['keterangan'] ?? '-'); ?></td>
+                                <td><?= htmlspecialchars($kls_row); ?></td>
+                                <td><?= htmlspecialchars((string)($row['nama_mapel_tampil'] ?? '-')); ?></td>
+                                <td><?= htmlspecialchars($perilaku_row); ?></td>
+                                <td class="fw-bold"><?= htmlspecialchars((string)$n_utama); ?></td>
+                                <td><?= htmlspecialchars((string)$n_pengh); ?></td>
+                                <td><?= htmlspecialchars((string)$n_ketr); ?></td>
                             </tr>
-                        <?php 
-                            endwhile;
+                        <?php
+                            endforeach;
                         else:
                         ?>
                             <tr>
-                                <td colspan="<?= ($role === 'guru' || $role === 'admin') ? '7' : '6'; ?>" class="text-center text-muted py-4">
-                                    Belum ada data nilai raport yang tersimpan.
+                                <td colspan="<?= ($role === 'guru' || $role === 'admin') ? '8' : '7'; ?>" class="text-center text-muted py-4">
+                                    Belum ada data nilai yang tersimpan.
                                 </td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
-
         </div>
     </div>
 </div>

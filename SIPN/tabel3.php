@@ -23,7 +23,7 @@ $sql = "SELECT users.*,
         COALESCE(siswa.nama, guru.nama) AS nama
         FROM users
         LEFT JOIN siswa ON users.id = siswa.user_id
-        LEFT JOIN guru ON users.id = guru.uer_id
+        LEFT JOIN guru ON users.id = guru.user_id
         ORDER BY users.id DESC";
 
 $hasil = mysqli_query($koneksi, $sql);
@@ -51,97 +51,8 @@ if ($hasil && mysqli_num_rows($hasil) > 0) {
 
 <body class="bg-light">
 
-<!-- NAVBAR DINAMIS BERDASARKAN ROLE YANG LOGIN -->
-<?php if ($role === 'admin'): ?>
-<!-- NAVBAR ADMIN -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Admin</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link" href="tabel2.php"><i class="bi bi-house-door me-1"></i> Dashboard</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_user.php"><i class="bi bi-people me-1"></i> User</a></li>
-                <li class="nav-item"><a class="nav-link active" href="#"><i class="bi bi-person me-1"></i> Siswa</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_guru.php"><i class="bi bi-person-badge me-1"></i> Guru</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_mapel.php"><i class="bi bi-journal-text me-1"></i> Mapel</a></li>
-                <li class="nav-item"><a class="nav-link" href="kelola_mengajar.php"><i class="bi bi-easel me-1"></i> Mengajar</a></li>
-                
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownAdmin">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<?php elseif ($role === 'guru'): ?>
-<!-- NAVBAR GURU -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Guru</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link" href="tabel2.php"><i class="bi bi-house-door me-1"></i> Data Nilai</a></li>
-                <li class="nav-item"><a class="nav-link" href="tambah_nilai.php"><i class="bi bi-plus-circle me-1"></i> Input Nilai</a></li>
-                <li class="nav-item"><a class="nav-link" href="tambah_mapel.php"><i class="bi bi-journal-plus me-1"></i> Tambah Mapel Saya</a></li>
-                <li class="nav-item"><a class="nav-link" href="daftar_guru.php"><i class="bi bi-people me-1"></i> Daftar Guru</a></li>
-                
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownGuru" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownGuru">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2 text-primary"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<?php else: ?>
-<!-- NAVBAR SISWA -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-success shadow-sm mb-4">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="tabel2.php"><i class="bi bi-mortarboard-fill me-2"></i>SIPN - Panel Siswa</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto align-items-lg-center">
-                <li class="nav-item"><a class="nav-link" href="tabel2.php"><i class="bi bi-journal-text me-1"></i> Nilai & Kelas Saya</a></li>
-                
-                <li class="nav-item dropdown ms-lg-2">
-                    <a class="nav-link dropdown-toggle btn btn-outline-light text-white px-3 py-1 mt-1 mt-lg-0" href="#" id="navbarDropdownSiswa" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Pengaturan
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarDropdownSiswa">
-                        <li><a class="dropdown-item" href="profil.php"><i class="bi bi-person-circle me-2 text-success"></i> Profil Saya</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger fw-semibold" href="logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                    </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-<?php endif; ?>
-
+<!-- Hapus kodingan nav lama di tabel3.php, lalu ganti dengan ini: -->
+<?php include 'navbar.php'; ?>
 <!-- KONTEN UTAMA HALAMAN -->
 <div class="container mt-4 mb-5">
     <div class="container center">

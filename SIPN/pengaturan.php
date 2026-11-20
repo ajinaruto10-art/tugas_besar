@@ -25,7 +25,7 @@ $user_id_val = $d_user['id'] ?? $d_user['ID'] ?? '';
 // Jika role guru, ambil data detail dari tabel guru secara fleksibel
 $detail_guru = null;
 if ($role === 'guru' && !empty($user_id_val)) {
-    $q_guru = mysqli_query($koneksi, "SELECT * FROM guru WHERE uer_id = '$user_id_val' LIMIT 1");
+    $q_guru = mysqli_query($koneksi, "SELECT * FROM guru WHERE user_id = '$user_id_val' LIMIT 1");
     if ($q_guru && mysqli_num_rows($q_guru) > 0) {
         $detail_guru = mysqli_fetch_assoc($q_guru);
     }

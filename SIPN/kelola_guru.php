@@ -21,7 +21,7 @@ $username_aman  = mysqli_real_escape_string($koneksi, $username_login);
 // Ambil data guru dari database
 $sql = "SELECT g.*, u.username 
         FROM guru g 
-        LEFT JOIN users u ON uer_id = u.id OR uer_id = u.id 
+        LEFT JOIN users u ON user_id = u.id OR user_id = u.id 
         ORDER BY g.id DESC";
 
 $hasil = mysqli_query($koneksi, $sql);

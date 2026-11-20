@@ -19,48 +19,53 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password      = password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT);
     $role          = $_POST['role'] ?? '';
 
-    // Insert ke tabel users
-    $sql_users = "INSERT INTO users (username, password, role, Creat_id) 
-                  VALUES ('$username', '$password', '$role', NOW())";
-    $query_users = mysqli_query($koneksi, $sql_users);
+    // Mulai Database Transaction agar aman (jika salah satu gagal, dibatalkan semua)
+    mysqli_begin_transaction($koneksi);
 
-    if ($query_users) {
+    try {
+        // 1. Insert ke tabel users
+        $sql_users = "INSERT INTO users (username, password, role, Creat_id) 
+                      VALUES ('$username', '$password', '$role', NOW())";
+        $query_users = mysqli_query($koneksi, $sql_users);
+
+        if (!$query_users) {
+            throw new Exception("Gagal menyimpan ke tabel users: " . mysqli_error($koneksi));
+        }
+
+        // Ambil ID user yang barusan dibuat
         $id_terakhir = mysqli_insert_id($koneksi);
 
-        // Insert ke tabel siswa pake ID user yang barusan dibuat
-        $sql_siswa = "INSERT INTO siswa (nis, nama_siswa, kelas,kelamin, user_id) 
+        // 2. Insert ke tabel siswa 
+        // (Pastikan nama kolom 'kelamin' atau 'jenis_kelamin' di database sesuai dengan tulisan di bawah)
+        $sql_siswa = "INSERT INTO siswa (nis, nama_siswa, kelas, kelamin, user_id) 
                       VALUES ('$nis', '$nama', '$kelas', '$jenis_kelamin', '$id_terakhir')";
         $query_siswa = mysqli_query($koneksi, $sql_siswa);
 
-        if ($query_siswa) {
-            // Kalau sukses, tampilin alert terus STOP script pake exit biar ga bablas
-            echo "<script>
-                    alert('Mantap, data berhasil disimpan bre!'); 
-                    window.location.href='tabel2.php';
-                  </script>";
-            exit;
-        } else {
-            // Pake addslashes biar tanda kutip dari error MySQL ga ngerusak Javascript
-            $error_siswa = addslashes(mysqli_error($koneksi));
-            echo "<script>alert('Gagal menyimpan data siswa: $error_siswa'); window.location.href='form2.php';</script>";
-            exit;
+        if (!$query_siswa) {
+            throw new Exception("Gagal menyimpan ke tabel siswa: " . mysqli_error($koneksi));
         }
-    } else {
-        $error_users = addslashes(mysqli_error($koneksi));
+
+        // Jika dua-duanya sukses, simpan permanen (Commit)
+        mysqli_commit($koneksi);
+
         echo "<script>
-                alert('Gagal menyimpan data kedalam tabel users: $error_users'); 
+                alert('Mantap, data berhasil disimpan bre!'); 
                 window.location.href='tabel2.php';
+              </script>";
+        exit;
+
+    } catch (Exception $e) {
+        // Jika ada error di tengah jalan, batalkan semua perubahan (Rollback)
+        mysqli_rollback($koneksi);
+        
+        $pesan_error = addslashes($e->getMessage());
+        echo "<script>
+                alert('$pesan_error'); 
+                window.location.href='form2.php';
               </script>";
         exit;
     }
 
-    echo "NIS: " . htmlspecialchars($nis) . "<br>";
-    echo "Nama: " . htmlspecialchars($nama) . "<br>";
-    echo "Kelas: " . htmlspecialchars($kelas) . "<br>";
-    echo "Jenis Kelamin: " . htmlspecialchars($jenis_kelamin) . "<br>";
-    echo "Username: " . htmlspecialchars($username) . "<br>";
-    echo "Password: " . htmlspecialchars($password) . "<br>";
-    echo "Role: " . htmlspecialchars($role) . "<br>";
 } else {
     header("Location: tabel2.php");
     exit;
